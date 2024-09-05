@@ -1,0 +1,9 @@
+# Dockerfile
+FROM python:3.8-slim-buster
+
+RUN pip install boto3 scikit-learn pandas
+
+WORKDIR /app
+COPY train.py /app
+
+ENTRYPOINT ["python", "train.py"]

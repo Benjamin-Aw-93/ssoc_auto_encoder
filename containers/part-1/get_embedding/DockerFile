@@ -1,0 +1,24 @@
+# Use a base image with Python
+FROM python:3.8-slim-buster
+
+# Install necessary dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy the requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the save_model script and execute it to save the model and tokenizer
+COPY save_model.py .
+RUN python save_model.py
+
+# Copy the main script
+COPY main.py .
+
+# Command to run the main script
+CMD ["python", "main.py"]

@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import json
+import os
+import pickle
+import sys
+import traceback
+from datetime import datetime
+
+import boto3
+
+from ssoc_autocoder.combined_model import SSOCAutoCoder
+
+# These are the paths to where SageMaker mounts interesting things in your container.
+prefix = '/opt/ml/'
+
+input_path = prefix + 'input/data'
+output_path = os.path.join(prefix, 'output')
+model_path = os.path.join(prefix, 'model')
+param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
+
+# current date in string format
+current_date = datetime.now().strftime("%Y-%m-%d")
+
+# This algorithm has a single channel of input data called 'training'. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_name='training'
+training_path = os.path.join(input_path, channel_name)
+
+# The function to execute the training.
+def train():
+    print('Starting the training (building process)')
+    try:
+
+        # Read in the paremeters  the user passed in with the training job
+        with open(param_path, 'r') as tc:
+            trainingParams = json.load(tc)
+
+        model_name = trainingParams.get('model_name', None)
+        embedding_model_path = trainingParams.get('embedding_model_path', None)
+        tokenizer_path = trainingParams.get('tokenizer_path', None)
+        full_classifier_path = trainingParams.get('full_classifier_path', None)
+        title_classifier_path = trainingParams.get('title_classifier_path', None)
+
+
+        # Check if the embedding model file exists in S3
+        s3 = boto3.client('s3')
+
+        if embedding_model_path is not None:
+            bucket, key = embedding_model_path.split('/', 3)[2:]
+            try:
+                s3.head_object(Bucket=bucket, Key=key)
+            except:
+                raise ValueError(f'Embedding model file {embedding_model_path} does not exist in S3.')
+
+        # Check if the tokenizer file exists in S3
+        if tokenizer_path is not None:
+            bucket, key = tokenizer_path.split('/', 3)[2:]
+            try:
+                s3.head_object(Bucket=bucket, Key=key)
+            except:
+                raise ValueError(f'Tokenizer file {tokenizer_path} does not exist in S3.')
+
+        # Check if the full classifier file exists in S3
+        if full_classifier_path is not None:
+            bucket, key = full_classifier_path.split('/', 3)[2:]
+            try:
+                s3.head_object(Bucket=bucket, Key=key)
+            except:
+                raise ValueError(f'Full classifier file {full_classifier_path} does not exist in S3.')
+
+        # Check if the title classifier file exists in S3
+        if title_classifier_path is not None:
+            bucket, key = title_classifier_path.split('/', 3)[2:]
+            try:
+                s3.head_object(Bucket=bucket, Key=key)
+            except:
+                raise ValueError(f'Title classifier file {title_classifier_path} does not exist in S3.')
+
+        # Initialize the SSOC AutoCoder
+        autocoder = SSOCAutoCoder()
+        autocoder.build(
+            model_name=model_name,
+            embedding_model_path=embedding_model_path,
+            tokenizer_path=tokenizer_path,
+            full_classifier_path=full_classifier_path,
+            title_classifier_path=title_classifier_path)
+
+        # save the model
+        autocoder.save(os.path.join(model_path, 'autocoder.pkl'))
+        print('Training complete.')
+
+    except Exception as e:
+        # Write out an error file. This will be returned as the failureReason in the
+        # DescribeTrainingJob result.
+        trc = traceback.format_exc()
+        with open(os.path.join(output_path, 'failure'), 'w') as s:
+            s.write('Exception during training: ' + str(e) + '\n' + trc)
+        # Printing this causes the exception to be in the training job logs, as well.
+        print('Exception during training: ' + str(e) + '\n' + trc, file=sys.stderr)
+        # A non-zero exit code causes the training job to be marked as Failed.
+        sys.exit(255)
+
+if __name__ == '__main__':
+    train()
+
+    # A zero exit code causes the job to be marked a Succeeded.
+    sys.exit(0)

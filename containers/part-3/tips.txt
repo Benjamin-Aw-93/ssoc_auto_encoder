@@ -1,0 +1,5 @@
+Permissions: The SageMaker execution role must have permissions to:
+
+    Access the specified S3 paths (for training data and other files you've specified in hyperparameters).
+    Access the ECR repository.
+    Create and manage SageMaker training jobs and endpoints.

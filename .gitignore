@@ -6,6 +6,7 @@
 /Notebooks/Pickle Files
 /.ipynb_checkpoints
 
+
 # Logging folders to ignore
 /*/.ipynb_checkpoints
 /.pytest_cache
